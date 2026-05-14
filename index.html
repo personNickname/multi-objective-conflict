@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多目标建模冲突：四层级分析框架</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        :root {
+            --level0-color: #e74c3c;
+            --level1-color: #e67e22;
+            --level2-color: #f39c12;
+            --level3-color: #3498db;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --text-muted: #666;
+            --accent: #0f3460;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+        header {
+            text-align: center;
+            padding: 3rem 0;
+            border-bottom: 1px solid var(--accent);
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--level0-color), var(--level3-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle { color: var(--text-secondary); font-size: 1.2rem; }
+
+        h2 { text-align: center; margin-bottom: 1.5rem; font-size: 1.5rem; }
+
+        section {
+            margin: 3rem 0;
+            padding: 2rem;
+            background: var(--bg-card);
+            border-radius: 16px;
+        }
+
+        .thesis-box {
+            background: linear-gradient(135deg, rgba(231, 76, 60, 0.1), rgba(52, 152, 219, 0.1));
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .thesis-box h2 { color: var(--level0-color); margin-bottom: 1rem; text-align: left; }
+        .thesis-box p { font-size: 1.1rem; color: var(--text-secondary); }
+
+        .correction-box {
+            background: rgba(231, 76, 60, 0.15);
+            border: 2px solid var(--level0-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .correction-box h3 { color: var(--level0-color); margin-bottom: 1rem; }
+
+        /* Cards and grids */
+        .card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .data-table th, .data-table td {
+            padding: 0.75rem;
+            text-align: center;
+            border-bottom: 1px solid var(--accent);
+        }
+
+        .data-table th { background: var(--accent); }
+        .data-table tr:hover { background: rgba(255,255,255,0.05); }
+
+        .conflict-row { background: rgba(231, 76, 60, 0.15) !important; }
+        .cooperative-row { background: rgba(46, 204, 113, 0.15) !important; }
+
+        .tag {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .tag-yes { background: rgba(46, 204, 113, 0.3); color: var(--success); }
+        .tag-no { background: rgba(231, 76, 60, 0.3); color: var(--level0-color); }
+        .tag-conflict { background: var(--level0-color); color: white; }
+        .tag-cooperative { background: var(--success); color: white; }
+
+        /* Level badges */
+        .level-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+        }
+
+        .level-badge.level-0 { background: var(--level0-color); }
+        .level-badge.level-1 { background: var(--level1-color); }
+        .level-badge.level-2 { background: var(--level2-color); }
+        .level-badge.level-3 { background: var(--level3-color); }
+
+        /* Flow diagrams */
+        .level-flow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+            margin: 2rem 0;
+        }
+
+        .level-card {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            border-left: 4px solid;
+        }
+
+        .level-card.level-0 { border-left-color: var(--level0-color); }
+        .level-card.level-1 { border-left-color: var(--level1-color); }
+        .level-card.level-2 { border-left-color: var(--level2-color); }
+        .level-card.level-3 { border-left-color: var(--level3-color); }
+
+        .level-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+        .level-title { font-size: 1.3rem; font-weight: 600; }
+        .level-subtitle { color: var(--text-secondary); font-size: 0.95rem; }
+
+        .level-formula {
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .arrow-down {
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-secondary); font-size: 1.5rem;
+        }
+
+        .arrow-label { font-size: 0.75rem; color: var(--text-secondary); text-align: center; }
+
+        /* Interactive demos */
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .demo-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .demo-box h3 { margin-bottom: 1rem; }
+
+        .sample-selector {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .sample-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--accent);
+            background: transparent;
+            color: var(--text-primary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+
+        .sample-btn:hover { background: var(--accent); }
+        .sample-btn.active { background: var(--level3-color); border-color: var(--level3-color); }
+        .sample-btn.conflict-btn.active { background: var(--level0-color); border-color: var(--level0-color); }
+        .sample-btn.coop-btn.active { background: var(--success); border-color: var(--success); }
+
+        .canvas-container {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .canvas-container svg { width: 100%; height: auto; }
+
+        .gradient-info {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .gradient-info-item { text-align: center; }
+        .gradient-info-item .label { font-size: 0.8rem; color: var(--text-secondary); }
+        .gradient-info-item .value { font-size: 1.2rem; font-weight: bold; }
+        .gradient-info-item .value.positive { color: var(--success); }
+        .gradient-info-item .value.negative { color: var(--level0-color); }
+
+        /* Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .metric-card {
+            background: rgba(0,0,0,0.3);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            border-top: 3px solid var(--level3-color);
+        }
+
+        .metric-card .value { font-size: 2rem; font-weight: bold; }
+        .metric-card .label { font-size: 0.85rem; color: var(--text-secondary); }
+
+        /* Controls */
+        .control-group { margin-bottom: 1rem; }
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        input[type="range"] { width: 100%; accent-color: var(--level3-color); }
+
+        /* Causal diagram */
+        .causal-diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding: 2rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+        }
+
+        .causal-node {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+            min-width: 140px;
+        }
+
+        .causal-node.root { background: var(--level0-color); box-shadow: 0 0 20px rgba(231, 76, 60, 0.4); }
+        .causal-node.l1 { background: var(--level1-color); }
+        .causal-node.l2 { background: var(--level2-color); color: #333; }
+        .causal-node.l3 { background: var(--level3-color); }
+
+        .causal-arrow { font-size: 1.5rem; color: var(--text-secondary); }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid var(--accent);
+            margin-top: 3rem;
+            color: var(--text-secondary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            h1 { font-size: 1.8rem; }
+            .demo-grid { grid-template-columns: 1fr; }
+            .causal-diagram { flex-direction: column; }
+            .causal-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>多目标建模冲突：四层级分析框架</h1>
+            <p class="subtitle">从标签负相关到 Pareto 前沿的完整因果链</p>
+        </header>
+
+        <div class="thesis-box">
+            <h2>核心论点（已修正）</h2>
+            <p>
+                <strong>梯度冲突来自标签的负相关性，主要发生在 (1,0) 和 (0,1) 样本上。</strong>
+                (1,1) 样本（如点击诱饵）内部梯度是<strong>协同的</strong>，但它造成<strong>跨样本的学习困难</strong>——
+                与 (1,0) 样本特征相似但 hate 标签不同，导致模型难以区分。
+            </p>
+        </div>
+
+        <div class="correction-box">
+            <h3>⚠️ 重要修正</h3>
+            <p>之前的分析存在错误：将 (1,1) 样本描述为"梯度冲突"的来源。</p>
+            <p><strong>正确理解：</strong></p>
+            <ul style="margin-left: 1.5rem; margin-top: 0.5rem; color: var(--text-secondary);">
+                <li><strong>梯度冲突</strong>发生在 (1,0) 和 (0,1) 样本，因为负相关标签导致梯度方向相反</li>
+                <li>(1,1) 样本内部梯度是<strong>协同的</strong>（都往 1 推）</li>
+                <li>(1,1) 样本的问题是<strong>跨样本学习困难</strong>和<strong>语义矛盾</strong></li>
+            </ul>
+        </div>
+
+        <!-- Corrected Sample Table -->
+        <section>
+            <h2>样本空间分析（已修正）</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>样本类型</th>
+                        <th>click</th>
+                        <th>hate</th>
+                        <th>click 梯度</th>
+                        <th>hate 梯度</th>
+                        <th>梯度关系</th>
+                        <th>问题类型</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="conflict-row">
+                        <td>优质内容</td>
+                        <td><span class="tag tag-yes">1</span></td>
+                        <td><span class="tag tag-no">0</span></td>
+                        <td>$(p-1) \cdot w$ 负</td>
+                        <td>$p \cdot w$ 正</td>
+                        <td><span class="tag tag-conflict">梯度冲突</span></td>
+                        <td>负相关标签</td>
+                    </tr>
+                    <tr class="conflict-row">
+                        <td>劣质内容</td>
+                        <td><span class="tag tag-no">0</span></td>
+                        <td><span class="tag tag-yes">1</span></td>
+                        <td>$p \cdot w$ 正</td>
+                        <td>$(p-1) \cdot w$ 负</td>
+                        <td><span class="tag tag-conflict">梯度冲突</span></td>
+                        <td>负相关标签</td>
+                    </tr>
+                    <tr class="cooperative-row">
+                        <td>无感内容</td>
+                        <td><span class="tag tag-no">0</span></td>
+                        <td><span class="tag tag-no">0</span></td>
+                        <td>$p \cdot w$ 正</td>
+                        <td>$p \cdot w$ 正</td>
+                        <td><span class="tag tag-cooperative">梯度协同</span></td>
+                        <td>无问题</td>
+                    </tr>
+                    <tr class="cooperative-row">
+                        <td><strong>点击诱饵</strong></td>
+                        <td><span class="tag tag-yes">1</span></td>
+                        <td><span class="tag tag-yes">1</span></td>
+                        <td>$(p-1) \cdot w$ 负</td>
+                        <td>$(p-1) \cdot w$ 负</td>
+                        <td><span class="tag tag-cooperative">梯度协同</span></td>
+                        <td><strong>跨样本学习困难</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary);">
+                <strong>关键修正：</strong>(1,1) 样本内部梯度是协同的！问题在于它和 (1,0) 样本的<strong>跨样本冲突</strong>。
+            </p>
+        </section>
+
+        <!-- Two Types of Conflict -->
+        <section>
+            <h2>两种不同的"冲突"</h2>
+            <div class="card-grid">
+                <div class="card" style="border-top: 3px solid var(--level0-color);">
+                    <h3 style="color: var(--level0-color);">类型 1：梯度冲突</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">发生在负相关标签的样本上</p>
+                    <ul style="color: var(--text-secondary); margin-left: 1rem;">
+                        <li>发生在 (1,0) 和 (0,1) 样本</li>
+                        <li>两个任务的梯度方向相反</li>
+                        <li>梯度互相抵消，学习效率低</li>
+                    </ul>
+                    <div class="level-formula" style="margin-top: 1rem;">
+                        $\cos(g_{click}, g_{hate}) < 0$
+                    </div>
+                </div>
+                <div class="card" style="border-top: 3px solid var(--level1-color);">
+                    <h3 style="color: var(--level1-color);">类型 2：跨样本学习困难</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">(1,1) 样本与 (1,0) 样本的冲突</p>
+                    <ul style="color: var(--text-secondary); margin-left: 1rem;">
+                        <li>(1,1) 和 (1,0) 样本特征相似（都被点击）</li>
+                        <li>但 hate 标签不同（1 vs 0）</li>
+                        <li>模型难以区分，表征被污染</li>
+                    </ul>
+                    <div class="level-formula" style="margin-top: 1rem;">
+                        $\|f(x_{1,1}) - f(x_{1,0})\| < \epsilon$ 但 $y_{hate}$ 不同
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Gradient Demo (Corrected) -->
+        <section>
+            <h2>交互演示：梯度方向（已修正）</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                选择样本类型，观察梯度是冲突还是协同
+            </p>
+
+            <div class="sample-selector" style="justify-content: center;">
+                <button class="sample-btn conflict-btn active" onclick="selectSample(0)">优质 (1,0) - 冲突</button>
+                <button class="sample-btn conflict-btn" onclick="selectSample(1)">劣质 (0,1) - 冲突</button>
+                <button class="sample-btn coop-btn" onclick="selectSample(2)">无感 (0,0) - 协同</button>
+                <button class="sample-btn coop-btn" onclick="selectSample(3)">点击诱饵 (1,1) - 协同</button>
+            </div>
+
+            <div class="demo-grid">
+                <div class="demo-box">
+                    <h3>梯度向量可视化</h3>
+                    <div class="canvas-container">
+                        <svg id="gradient-svg" viewBox="0 0 400 280">
+                            <defs>
+                                <marker id="arrow-click" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                                    <path d="M0,0 L0,6 L9,3 z" fill="#3498db"/>
+                                </marker>
+                                <marker id="arrow-hate" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                                    <path d="M0,0 L0,6 L9,3 z" fill="#e74c3c"/>
+                                </marker>
+                                <marker id="arrow-sum" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                                    <path d="M0,0 L0,6 L9,3 z" fill="#2ecc71"/>
+                                </marker>
+                            </defs>
+
+                            <!-- Grid -->
+                            <line x1="50" y1="140" x2="350" y2="140" stroke="#333" stroke-width="1"/>
+                            <line x1="200" y1="20" x2="200" y2="260" stroke="#333" stroke-width="1"/>
+
+                            <text x="360" y="145" fill="#666" font-size="11">h₁</text>
+                            <text x="205" y="15" fill="#666" font-size="11">h₂</text>
+
+                            <!-- Gradient arrows -->
+                            <line id="grad-click" x1="200" y1="140" x2="120" y2="70" stroke="#3498db" stroke-width="4" marker-end="url(#arrow-click)"/>
+                            <line id="grad-hate" x1="200" y1="140" x2="280" y2="70" stroke="#e74c3c" stroke-width="4" marker-end="url(#arrow-hate)"/>
+                            <line id="grad-sum" x1="200" y1="140" x2="200" y2="50" stroke="#2ecc71" stroke-width="3" stroke-dasharray="8,4" marker-end="url(#arrow-sum)"/>
+
+                            <!-- Labels -->
+                            <text id="label-click" x="90" y="60" fill="#3498db" font-size="12" font-weight="bold">∇L_click</text>
+                            <text id="label-hate" x="285" y="60" fill="#e74c3c" font-size="12" font-weight="bold">∇L_hate</text>
+                            <text id="label-sum" x="210" y="45" fill="#2ecc71" font-size="12">总梯度</text>
+
+                            <text id="sample-info" x="200" y="275" fill="#aaa" font-size="11" text-anchor="middle">样本: click=1, hate=0 (优质内容)</text>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="demo-box">
+                    <h3>梯度分析</h3>
+                    <div class="gradient-info" style="flex-direction: column; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-around;">
+                            <div class="gradient-info-item">
+                                <div class="label">梯度内积</div>
+                                <div class="value negative" id="grad-dot">-0.71</div>
+                            </div>
+                            <div class="gradient-info-item">
+                                <div class="label">cos(g_a, g_b)</div>
+                                <div class="value negative" id="grad-cos">-0.71</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-around;">
+                            <div class="gradient-info-item">
+                                <div class="label">梯度关系</div>
+                                <div class="value negative" id="conflict-status">冲突</div>
+                            </div>
+                            <div class="gradient-info-item">
+                                <div class="label">问题类型</div>
+                                <div class="value" id="problem-type" style="color: var(--level0-color);">负相关标签</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="explanation-box" style="margin-top: 1rem; padding: 1rem; background: rgba(231,76,60,0.1); border-radius: 8px;">
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;" id="explanation-text">
+                            click=1 希望表征往"增大 click 预测"方向移动，
+                            hate=0 希望表征往"减小 hate 预测"方向移动。
+                            两个方向相反，梯度冲突！
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cross-sample Conflict Demo -->
+        <section>
+            <h2>交互演示：跨样本学习困难</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                (1,1) 样本内部协同，但与 (1,0) 样本的学习信号冲突
+            </p>
+
+            <div class="demo-grid">
+                <div class="demo-box">
+                    <h3>特征空间中的样本分布</h3>
+                    <div class="canvas-container">
+                        <svg viewBox="0 0 400 300">
+                            <!-- Background regions -->
+                            <rect x="200" y="0" width="200" height="150" fill="rgba(46, 204, 113, 0.1)"/>
+                            <rect x="0" y="0" width="200" height="150" fill="rgba(241, 196, 15, 0.1)"/>
+                            <rect x="0" y="150" width="200" height="150" fill="rgba(149, 165, 166, 0.1)"/>
+                            <rect x="200" y="150" width="200" height="150" fill="rgba(52, 152, 219, 0.1)"/>
+
+                            <!-- Axes -->
+                            <line x1="0" y1="150" x2="400" y2="150" stroke="#444" stroke-width="2"/>
+                            <line x1="200" y1="0" x2="200" y2="300" stroke="#444" stroke-width="2"/>
+
+                            <!-- Labels -->
+                            <text x="300" y="75" fill="#2ecc71" font-size="13" text-anchor="middle">优质 (1,0)</text>
+                            <text x="100" y="75" fill="#f1c40f" font-size="13" text-anchor="middle">劣质 (0,1)</text>
+                            <text x="100" y="225" fill="#95a5a6" font-size="13" text-anchor="middle">无感 (0,0)</text>
+                            <text x="300" y="225" fill="#3498db" font-size="13" text-anchor="middle">点击诱饵 (1,1)</text>
+
+                            <!-- Sample points -->
+                            <g id="sample-points">
+                                <!-- 优质 (1,0) -->
+                                <circle cx="280" cy="60" r="6" fill="#2ecc71"/>
+                                <circle cx="310" cy="80" r="6" fill="#2ecc71"/>
+                                <circle cx="260" cy="90" r="6" fill="#2ecc71"/>
+                                <circle cx="290" cy="50" r="6" fill="#2ecc71"/>
+                                <circle cx="320" cy="70" r="6" fill="#2ecc71"/>
+
+                                <!-- 劣质 (0,1) -->
+                                <circle cx="80" cy="60" r="6" fill="#f1c40f"/>
+                                <circle cx="110" cy="80" r="6" fill="#f1c40f"/>
+                                <circle cx="60" cy="90" r="6" fill="#f1c40f"/>
+                                <circle cx="90" cy="50" r="6" fill="#f1c40f"/>
+
+                                <!-- 无感 (0,0) -->
+                                <circle cx="80" cy="200" r="6" fill="#95a5a6"/>
+                                <circle cx="110" cy="220" r="6" fill="#95a5a6"/>
+
+                                <!-- 点击诱饵 (1,1) - 注意位置接近优质内容！ -->
+                                <circle cx="270" cy="180" r="8" fill="#e74c3c" stroke="#fff" stroke-width="2"/>
+                                <circle cx="300" cy="200" r="8" fill="#e74c3c" stroke="#fff" stroke-width="2"/>
+                            </g>
+
+                            <!-- Arrow showing the problem -->
+                            <line x1="285" y1="100" x2="285" y2="170" stroke="#e74c3c" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrow-hate)"/>
+                            <text x="295" y="135" fill="#e74c3c" font-size="10">特征相似</text>
+                            <text x="295" y="148" fill="#e74c3c" font-size="10">hate 不同!</text>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="demo-box">
+                    <h3>问题分析</h3>
+                    <div class="card" style="background: rgba(231,76,60,0.1); border: 1px solid var(--level0-color);">
+                        <h4 style="color: var(--level0-color); margin-bottom: 0.5rem;">核心矛盾</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                            优质内容 (1,0) 和点击诱饵 (1,1) 都被用户点击，
+                            所以它们的<strong>输入特征很相似</strong>（都能吸引点击）。
+                        </p>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            但模型需要：
+                        </p>
+                        <ul style="color: var(--text-secondary); margin-left: 1rem; font-size: 0.9rem;">
+                            <li>对优质内容预测 hate=0</li>
+                            <li>对点击诱饵预测 hate=1</li>
+                        </ul>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            <strong>相似输入，不同输出</strong> → 模型难以学习
+                        </p>
+                    </div>
+                    <div class="card" style="margin-top: 1rem;">
+                        <h4 style="margin-bottom: 0.5rem;">这不是梯度冲突！</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                            (1,1) 样本内部梯度是协同的（都往 1 推）。
+                            问题是<strong>跨样本</strong>的学习信号矛盾。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Corrected Level Framework -->
+        <section>
+            <h2>四层级因果链（已修正）</h2>
+            <div class="level-flow">
+                <div class="level-card level-0">
+                    <div class="level-header">
+                        <span class="level-badge level-0">Level 0</span>
+                        <span class="level-title">数据层冲突（根源）</span>
+                    </div>
+                    <p class="level-subtitle">
+                        <strong>标签负相关</strong> + <strong>跨样本特征相似但标签不同</strong>
+                    </p>
+                    <div class="level-formula">
+                        $\text{Corr}(Y_a, Y_b) < 0$ 且 $\exists x_1, x_2: f(x_1) \approx f(x_2)$ 但 $y(x_1) \neq y(x_2)$
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+                <div class="arrow-label">负相关标签导致</div>
+
+                <div class="level-card level-1">
+                    <div class="level-header">
+                        <span class="level-badge level-1">Level 1</span>
+                        <span class="level-title">表征层冲突</span>
+                    </div>
+                    <p class="level-subtitle">共享表征无法同时最优服务两个任务</p>
+                    <div class="level-formula">
+                        $h^*_{click} \neq h^*_{hate}$
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+                <div class="arrow-label">在 (1,0) 和 (0,1) 样本上表现为</div>
+
+                <div class="level-card level-2">
+                    <div class="level-header">
+                        <span class="level-badge level-2">Level 2</span>
+                        <span class="level-title">梯度层冲突</span>
+                    </div>
+                    <p class="level-subtitle">在<strong>负相关标签样本</strong>上，梯度方向相反</p>
+                    <div class="level-formula">
+                        对于 $(1,0)$ 和 $(0,1)$ 样本：$\cos(g_a, g_b) < 0$
+                    </div>
+                </div>
+
+                <div class="arrow-down">↓</div>
+                <div class="arrow-label">导致</div>
+
+                <div class="level-card level-3">
+                    <div class="level-header">
+                        <span class="level-badge level-3">Level 3</span>
+                        <span class="level-title">目标层冲突（Pareto 不可达）</span>
+                    </div>
+                    <p class="level-subtitle">不存在同时最优的解，只能在 Pareto 前沿上选择权衡点</p>
+                    <div class="level-formula">
+                        $|\mathcal{P}^*| > 1$
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Corrected Summary -->
+        <section>
+            <h2>修正后的总结</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>问题</th>
+                        <th>之前的错误</th>
+                        <th>正确理解</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>(1,1) 样本</td>
+                        <td>是"梯度冲突"的来源</td>
+                        <td>内部梯度<strong>协同</strong>，问题是<strong>跨样本学习困难</strong></td>
+                    </tr>
+                    <tr>
+                        <td>梯度冲突发生在</td>
+                        <td>暗示 (1,1) 样本</td>
+                        <td><strong>(1,0) 和 (0,1)</strong> 样本（负相关标签）</td>
+                    </tr>
+                    <tr>
+                        <td>冲突的本质</td>
+                        <td>单个样本内的矛盾</td>
+                        <td><strong>跨样本</strong>的学习信号矛盾</td>
+                    </tr>
+                    <tr>
+                        <td>数据层冲突</td>
+                        <td>只强调 (1,1) 的存在</td>
+                        <td>标签负相关 + 特征相似但标签不同</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Causal Chain -->
+        <section>
+            <h2>因果链总览</h2>
+            <div class="causal-diagram">
+                <div class="causal-node root">
+                    Level 0<br>
+                    <small>标签负相关 +</small><br>
+                    <small>跨样本矛盾</small>
+                </div>
+                <div class="causal-arrow">→</div>
+                <div class="causal-node l1">
+                    Level 1<br>
+                    <small>表征层冲突</small>
+                </div>
+                <div class="causal-arrow">→</div>
+                <div class="causal-node l2">
+                    Level 2<br>
+                    <small>梯度冲突</small><br>
+                    <small>(在 1,0 和 0,1 上)</small>
+                </div>
+                <div class="causal-arrow">→</div>
+                <div class="causal-node l3">
+                    Level 3<br>
+                    <small>Pareto 不可达</small>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>多目标建模冲突分析框架（已修正） | 基于 Click-Hate 场景的严格数学推导</p>
+            <p style="margin-top: 0.5rem;">核心结论：<strong>梯度冲突来自负相关标签，(1,1) 样本的问题是跨样本学习困难</strong></p>
+        </footer>
+    </div>
+
+    <script>
+        // Render KaTeX
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+        });
+
+        // Sample configurations (CORRECTED)
+        const sampleConfigs = [
+            {
+                click: 1, hate: 0, name: '优质内容',
+                gradClick: [-80, -70], gradHate: [80, -70],
+                isConflict: true, problemType: '负相关标签',
+                explanation: 'click=1 希望表征往"增大 click"方向，hate=0 希望往"减小 hate"方向。方向相反，梯度冲突！'
+            },
+            {
+                click: 0, hate: 1, name: '劣质内容',
+                gradClick: [80, 70], gradHate: [-80, 70],
+                isConflict: true, problemType: '负相关标签',
+                explanation: 'click=0 希望表征往"减小 click"方向，hate=1 希望往"增大 hate"方向。方向相反，梯度冲突！'
+            },
+            {
+                click: 0, hate: 0, name: '无感内容',
+                gradClick: [70, 50], gradHate: [70, -50],
+                isConflict: false, problemType: '无问题',
+                explanation: 'click=0 和 hate=0 都希望减小预测值。梯度方向大致一致，协同！'
+            },
+            {
+                click: 1, hate: 1, name: '点击诱饵',
+                gradClick: [-70, -50], gradHate: [-70, 50],
+                isConflict: false, problemType: '跨样本学习困难',
+                explanation: 'click=1 和 hate=1 都希望增大预测值。梯度方向大致一致，内部协同！但与 (1,0) 样本的学习信号冲突。'
+            }
+        ];
+
+        function selectSample(idx) {
+            const btns = document.querySelectorAll('.sample-btn');
+            btns.forEach((btn, i) => {
+                btn.classList.remove('active');
+                if (i === idx) btn.classList.add('active');
+            });
+
+            const config = sampleConfigs[idx];
+
+            // Update arrows
+            document.getElementById('grad-click').setAttribute('x2', 200 + config.gradClick[0]);
+            document.getElementById('grad-click').setAttribute('y2', 140 + config.gradClick[1]);
+            document.getElementById('grad-hate').setAttribute('x2', 200 + config.gradHate[0]);
+            document.getElementById('grad-hate').setAttribute('y2', 140 + config.gradHate[1]);
+
+            const sumX = (config.gradClick[0] + config.gradHate[0]) * 0.6;
+            const sumY = (config.gradClick[1] + config.gradHate[1]) * 0.6;
+            document.getElementById('grad-sum').setAttribute('x2', 200 + sumX);
+            document.getElementById('grad-sum').setAttribute('y2', 140 + sumY);
+
+            // Update labels
+            document.getElementById('label-click').setAttribute('x', 200 + config.gradClick[0] - 20);
+            document.getElementById('label-click').setAttribute('y', 140 + config.gradClick[1] - 10);
+            document.getElementById('label-hate').setAttribute('x', 200 + config.gradHate[0] + 5);
+            document.getElementById('label-hate').setAttribute('y', 140 + config.gradHate[1] - 10);
+
+            document.getElementById('sample-info').textContent =
+                `样本: click=${config.click}, hate=${config.hate} (${config.name})`;
+
+            // Calculate cosine
+            const dot = config.gradClick[0] * config.gradHate[0] + config.gradClick[1] * config.gradHate[1];
+            const magA = Math.sqrt(config.gradClick[0]**2 + config.gradClick[1]**2);
+            const magB = Math.sqrt(config.gradHate[0]**2 + config.gradHate[1]**2);
+            const cos = dot / (magA * magB);
+
+            document.getElementById('grad-dot').textContent = (dot / 10000).toFixed(2);
+            document.getElementById('grad-cos').textContent = cos.toFixed(2);
+
+            const dotEl = document.getElementById('grad-dot');
+            const cosEl = document.getElementById('grad-cos');
+            const statusEl = document.getElementById('conflict-status');
+            const problemEl = document.getElementById('problem-type');
+            const explBox = document.getElementById('explanation-box');
+            const explText = document.getElementById('explanation-text');
+
+            if (config.isConflict) {
+                dotEl.className = 'value negative';
+                cosEl.className = 'value negative';
+                statusEl.textContent = '冲突';
+                statusEl.className = 'value negative';
+                explBox.style.background = 'rgba(231,76,60,0.1)';
+            } else {
+                dotEl.className = 'value positive';
+                cosEl.className = 'value positive';
+                statusEl.textContent = '协同';
+                statusEl.className = 'value positive';
+                explBox.style.background = 'rgba(46,204,113,0.1)';
+            }
+
+            problemEl.textContent = config.problemType;
+            problemEl.style.color = config.isConflict ? 'var(--level0-color)' :
+                                    (config.problemType === '跨样本学习困难' ? 'var(--level1-color)' : 'var(--success)');
+
+            explText.textContent = config.explanation;
+        }
+
+        // Initialize
+        selectSample(0);
+    </script>
+</body>
+</html>
