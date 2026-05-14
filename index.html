@@ -95,6 +95,12 @@
         .causal-node.l2 { background: var(--level2-color); color: #333; }
         .causal-node.l3 { background: var(--level3-color); }
         .causal-arrow { font-size: 1.5rem; color: var(--text-secondary); }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--accent); background: transparent; color: var(--text-primary); border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn:hover { background: var(--accent); }
+        .btn-primary { background: var(--success); border-color: var(--success); }
+        .btn-primary:hover { background: #27ae60; }
+        .progress-bar { height: 8px; background: var(--accent); border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--level0-color), var(--level3-color)); transition: width 0.1s; }
         footer { text-align: center; padding: 2rem; border-top: 1px solid var(--accent); margin-top: 3rem; color: var(--text-secondary); }
         @media (max-width: 768px) {
             .container { padding: 1rem; }
@@ -299,6 +305,71 @@
             </div>
         </section>
 
+        <!-- Training Animation -->
+        <section>
+            <h2>训练过程模拟</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                观察模型在 Loss 空间中的轨迹：冲突样本导致震荡，最终收敛到 Pareto 前沿
+            </p>
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+                <button class="btn btn-primary" id="anim-play" onclick="toggleAnim()">▶ 开始</button>
+                <button class="btn" onclick="resetAnim()">↺ 重置</button>
+                <div class="progress-bar" style="flex: 1; max-width: 300px;">
+                    <div class="progress-fill" id="anim-progress" style="width: 0%;"></div>
+                </div>
+                <span id="anim-epoch" style="min-width: 80px;">Epoch: 0</span>
+            </div>
+            <div class="demo-grid">
+                <div class="demo-box">
+                    <h3>Loss 空间轨迹</h3>
+                    <div class="canvas-container">
+                        <svg id="anim-svg" viewBox="0 0 400 300">
+                            <rect x="0" y="0" width="200" height="150" fill="rgba(46, 204, 113, 0.08)"/>
+                            <rect x="200" y="0" width="200" height="150" fill="rgba(241, 196, 15, 0.08)"/>
+                            <rect x="0" y="150" width="200" height="150" fill="rgba(52, 152, 219, 0.08)"/>
+                            <rect x="200" y="150" width="200" height="150" fill="rgba(231, 76, 60, 0.08)"/>
+                            <line x1="50" y1="270" x2="380" y2="270" stroke="#666" stroke-width="2"/>
+                            <line x1="50" y1="270" x2="50" y2="30" stroke="#666" stroke-width="2"/>
+                            <text x="215" y="295" fill="#aaa" font-size="11" text-anchor="middle">Loss_click</text>
+                            <text x="25" y="150" fill="#aaa" font-size="11" text-anchor="middle" transform="rotate(-90, 25, 150)">Loss_hate</text>
+                            <path d="M 70 250 Q 100 180 150 120 Q 220 70 360 50" fill="none" stroke="#3498db" stroke-width="2" opacity="0.5"/>
+                            <text x="370" y="45" fill="#3498db" font-size="10">Pareto</text>
+                            <circle cx="70" cy="50" r="5" fill="none" stroke="#e74c3c" stroke-width="2" stroke-dasharray="3,2"/>
+                            <text x="80" y="45" fill="#e74c3c" font-size="9">理想点</text>
+                            <path id="anim-trajectory" d="" fill="none" stroke="#2ecc71" stroke-width="2" opacity="0.6"/>
+                            <circle id="anim-point" cx="320" cy="220" r="8" fill="#2ecc71"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="demo-box">
+                    <h3>实时指标</h3>
+                    <div class="gradient-info" style="flex-direction: column; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-around;">
+                            <div class="gradient-info-item">
+                                <div class="label">Loss_click</div>
+                                <div class="value" id="loss-click" style="color: #3498db;">0.82</div>
+                            </div>
+                            <div class="gradient-info-item">
+                                <div class="label">Loss_hate</div>
+                                <div class="value" id="loss-hate" style="color: #e74c3c;">0.75</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-around;">
+                            <div class="gradient-info-item">
+                                <div class="label">当前状态</div>
+                                <div class="value" id="train-status" style="color: var(--text-secondary);">等待开始</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card" style="margin-top: 1rem;">
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;" id="train-explain">
+                            点击"开始"观察训练过程。冲突样本的梯度会导致轨迹震荡，最终收敛到 Pareto 前沿上的某个权衡点。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Four Levels -->
         <section>
             <h2>四层级因果链</h2>
@@ -402,6 +473,100 @@
             document.getElementById('explanation-text').textContent = config.explanation;
         }
         selectSample(0);
+
+        // Training Animation
+        let animRunning = false;
+        let animEpoch = 0;
+        let animX = 320, animY = 220;
+        let trajectory = [];
+        const maxEpoch = 200;
+
+        function toggleAnim() {
+            animRunning = !animRunning;
+            document.getElementById('anim-play').textContent = animRunning ? '⏸ 暂停' : '▶ 继续';
+            if (animRunning) requestAnimationFrame(animStep);
+        }
+
+        function resetAnim() {
+            animRunning = false;
+            animEpoch = 0;
+            animX = 320; animY = 220;
+            trajectory = [];
+            document.getElementById('anim-play').textContent = '▶ 开始';
+            document.getElementById('anim-progress').style.width = '0%';
+            document.getElementById('anim-epoch').textContent = 'Epoch: 0';
+            document.getElementById('anim-point').setAttribute('cx', 320);
+            document.getElementById('anim-point').setAttribute('cy', 220);
+            document.getElementById('anim-trajectory').setAttribute('d', '');
+            document.getElementById('loss-click').textContent = '0.82';
+            document.getElementById('loss-hate').textContent = '0.75';
+            document.getElementById('train-status').textContent = '等待开始';
+            document.getElementById('train-explain').textContent = '点击"开始"观察训练过程。冲突样本的梯度会导致轨迹震荡，最终收敛到 Pareto 前沿上的某个权衡点。';
+        }
+
+        function animStep() {
+            if (!animRunning || animEpoch >= maxEpoch) {
+                if (animEpoch >= maxEpoch) {
+                    document.getElementById('train-status').textContent = '已收敛';
+                    document.getElementById('train-status').style.color = '#2ecc71';
+                    document.getElementById('train-explain').textContent = '训练结束。模型收敛到 Pareto 前沿，这是两个目标的最佳权衡点，无法同时再优化两者。';
+                }
+                animRunning = false;
+                document.getElementById('anim-play').textContent = '▶ 继续';
+                return;
+            }
+            animEpoch++;
+
+            // Pareto front approximation: y = 250 - 200 * (1 - ((x-70)/290)^0.5)
+            const progress = animEpoch / maxEpoch;
+            const targetX = 70 + 120 * progress;
+            const targetY = 250 - 200 * Math.sqrt((targetX - 70) / 290);
+
+            // Add oscillation from conflicting gradients (decreases over time)
+            const oscillation = (1 - progress) * 15;
+            const noiseX = (Math.random() - 0.5) * oscillation + Math.sin(animEpoch * 0.3) * oscillation * 0.5;
+            const noiseY = (Math.random() - 0.5) * oscillation + Math.cos(animEpoch * 0.3) * oscillation * 0.5;
+
+            animX += (targetX - animX) * 0.08 + noiseX;
+            animY += (targetY - animY) * 0.08 + noiseY;
+
+            animX = Math.max(50, Math.min(380, animX));
+            animY = Math.max(30, Math.min(270, animY));
+
+            trajectory.push({x: animX, y: animY});
+            if (trajectory.length > 150) trajectory.shift();
+
+            document.getElementById('anim-point').setAttribute('cx', animX);
+            document.getElementById('anim-point').setAttribute('cy', animY);
+            document.getElementById('anim-progress').style.width = (progress * 100) + '%';
+            document.getElementById('anim-epoch').textContent = 'Epoch: ' + animEpoch;
+
+            const lossClick = ((animX - 50) / 330).toFixed(2);
+            const lossHate = ((270 - animY) / 240).toFixed(2);
+            document.getElementById('loss-click').textContent = lossClick;
+            document.getElementById('loss-hate').textContent = lossHate;
+
+            if (progress < 0.3) {
+                document.getElementById('train-status').textContent = '快速下降';
+                document.getElementById('train-status').style.color = '#3498db';
+                document.getElementById('train-explain').textContent = '初期两个目标都在快速优化，但冲突样本的梯度导致轨迹出现明显震荡。';
+            } else if (progress < 0.7) {
+                document.getElementById('train-status').textContent = '震荡收敛';
+                document.getElementById('train-status').style.color = '#f39c12';
+                document.getElementById('train-explain').textContent = '接近 Pareto 前沿，优化一个目标会损害另一个。梯度冲突导致来回震荡。';
+            } else {
+                document.getElementById('train-status').textContent = '接近收敛';
+                document.getElementById('train-status').style.color = '#2ecc71';
+                document.getElementById('train-explain').textContent = '逐渐稳定在 Pareto 前沿附近，震荡幅度减小。';
+            }
+
+            if (trajectory.length > 1) {
+                const pathD = trajectory.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+                document.getElementById('anim-trajectory').setAttribute('d', pathD);
+            }
+
+            requestAnimationFrame(animStep);
+        }
     </script>
 </body>
 </html>
